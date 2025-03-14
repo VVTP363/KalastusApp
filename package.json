@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "buffer": "^6.0.3",
+    "fast-xml-parser": "^5.0.8",
+    "stream-browserify": "^3.0.0",
+    "util": "^0.12.5"
+  },
+  "devDependencies": {
+    "timers-browserify": "^2.0.12"
+  }
+}

@@ -1,8 +1,7 @@
 from django.urls import path
-from . import views
+from .views import get_weather, get_weather_forecast
 
 urlpatterns = [
-    path('', views.index, name='home'),  # Root-sivun reitti
-    # Muita reittejä, kuten kalastuspaikat tai kalastustiedot
+    path('weather/<str:location>/', get_weather, name='weather'),
+    path('forecast/<str:location>/', get_weather_forecast, name='weather-forecast'),
 ]
-
