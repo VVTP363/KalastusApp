@@ -26,7 +26,6 @@ const Weather = () => {
   }
 }, [locationFetched]);
 
-
   useEffect(() => {
     if (latitude && longitude) {
       fetchWeatherData(latitude, longitude);
@@ -82,6 +81,7 @@ const Weather = () => {
       setLocationName(location);
     } catch (error) {
       console.error("❌ Paikan haku epäonnistui:", error);
+      setLocationName("Paikka tuntematon");
     }
   };
 
@@ -89,7 +89,7 @@ const fetchWeatherData = async (lat, lon) => {
   setLoading(true);
   setError(null);
   try {
-    const url = `https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature&storedquery_id=fmi::forecast::harmonie::surface::point::simple&latlon=${lat},${lon}&parameters=Temperature,WindSpeedMS,WindDirection,Pressure,WeatherSymbol3`;
+    const url = `https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature&storedquery_id=fmi::forecast::harmonie::surface::point::simple&latlon=${lat},${lon}&parameters=Temperature,FeelsLikeTemp,WindSpeedMS,WindDirection,Pressure,WeatherSymbol3&_=${new Date().getTime()}`;
 
     console.log("📡 Haetaan säädataa:", url);
     const response = await axios.get(url);
@@ -120,20 +120,14 @@ const fetchWeatherData = async (lat, lon) => {
         dataMap[dayKey] = {};
       }
 
-      // 🔹 Muutetaan 00:00 → 24:00 päivän viimeiseksi arvoksi
-      if (hourKey === 0) {
-        hourKey = 24;
-      }
+      if (hourKey === 0) hourKey = 24;
 
-      // 🔹 Jos klo 16 jälkeen, näytä tunnin välein vuorokauden loppuun asti
       if (currentHour >= 16 && hourKey >= currentHour && hourKey <= 24) {
         if (!dataMap[dayKey][hourKey]) {
           dataMap[dayKey][hourKey] = {};
         }
         dataMap[dayKey][hourKey][paramName] = value;
-      } 
-      // 🔹 Muutoin pidetään 08:00, 16:00 ja 24:00 logiikka
-      else if ([8, 16, 24].includes(hourKey)) {
+      } else if ([8, 16, 24].includes(hourKey)) {
         if (!dataMap[dayKey][hourKey]) {
           dataMap[dayKey][hourKey] = {};
         }
@@ -142,6 +136,7 @@ const fetchWeatherData = async (lat, lon) => {
     });
 
     setForecastData(dataMap);
+    await reverseGeocode(lat, lon); // 🔥 Lisätty, jotta paikka päivittyy
     setCurrentDayIndex(0);
   } catch (error) {
     console.error("❌ Virhe haettaessa säädataa:", error);
@@ -153,6 +148,8 @@ const fetchWeatherData = async (lat, lon) => {
 
   const searchForLocation = async () => {
     try {
+      setLoading(true);
+      setForecastData({});
       const res = await axios.get(
         `https://nominatim.openstreetmap.org/search?format=json&q=${searchLocation}`
       );
@@ -161,7 +158,7 @@ const fetchWeatherData = async (lat, lon) => {
         setLatitude(place.lat);
         setLongitude(place.lon);
         setLocationName(place.display_name.split(",")[0]);
-        fetchWeatherData(place.lat, place.lon);
+        await fetchWeatherData(place.lat, place.lon);
       } else {
         setError("Paikkaa ei löydy");
       }
@@ -171,12 +168,15 @@ const fetchWeatherData = async (lat, lon) => {
     }
   };
 
+useEffect(() => {
+  calculateMoonPhase();
+}, []);
+
   const calculateMoonPhase = () => {
     const today = new Date();
     
     // Viimeisin uusikuu ennen tätä päivämäärää
     const lastNewMoon = new Date("2025-02-28"); // Uusikuu ennen täysikuuta 14.3.2025
-
     const msPerDay = 1000 * 60 * 60 * 24;
     const moonCycle = 29.53; // Kuun kierto päivinä
 
@@ -185,12 +185,15 @@ const fetchWeatherData = async (lat, lon) => {
     if (diffDays < 0) diffDays += moonCycle; // Korjataan mahdollinen negatiivinen arvo
 
     // Kuun vaiheet:
-    if (diffDays < 1.5) setMoonPhase("🌑 Uusikuu");
-    else if (diffDays < 7.5) setMoonPhase("🌒 Kasvava sirppi 1/4");
-    else if (diffDays < 14.5) setMoonPhase("🌓 Kasvava puolikuu 2/4");
-    else if (diffDays < 16.5) setMoonPhase("🌕 Täysikuu"); // Täysikuu kestää 1.5 päivää
-    else if (diffDays < 23) setMoonPhase("🌖 Pienenevä kuu 3/4"); // 16.5–23 päivää
-    else setMoonPhase("🌗 Pienenevä kuu 4/4"); // 23–29.53 päivää
+    let phaseText = "🌑 Uusikuu";
+    if (diffDays < 1.5) phaseText = "🌑 Uusikuu";
+    else if (diffDays < 7.5) phaseText = "🌒 Kasvava sirppi 1/4";
+    else if (diffDays < 14.5) phaseText = "🌓 Kasvava puolikuu 2/4";
+    else if (diffDays < 16.5) phaseText = "🌕 Täysikuu";
+    else if (diffDays < 23) phaseText = "🌖 Pienenevä kuu 3/4";
+    else phaseText = "🌗 Pienenevä kuu 4/4";
+
+  setMoonPhase(phaseText);
 };
 
   const changeDay = (direction) => {
@@ -217,7 +220,7 @@ const fetchWeatherData = async (lat, lon) => {
   const days = Object.keys(forecastData);
   const currentDay = days[currentDayIndex];
   const currentData = forecastData[currentDay];
-
+ 
   return (
     <div>
       <h2>🌦 Sääennuste</h2>
@@ -239,26 +242,25 @@ const fetchWeatherData = async (lat, lon) => {
 
       </div>
 
-      {loading && <p>⏳ Ladataan säätietoja...</p>}
-      {error && <p style={{ color: "red" }}>⚠️ {error}</p>}
-
       {currentData && (
-        <div key={currentDay}> // Pakottaa Reactin re-rendaamaan UI:n
-          <h3>📅 {currentDay}</h3>
-          {Object.keys(currentData).map((hour) => (
-            <div key={hour}>
-              <h4>🕒 Klo {hour}:00</h4>
-              <p>🌡 Lämpötila: {currentData[hour].Temperature}°C</p>
-              <p>💨 Tuulen nopeus: {currentData[hour].WindSpeedMS} m/s</p>
-              <p>🧭 Tuulen suunta: {currentData[hour].WindDirection}°</p>
-              <p>🔽 Ilmanpaine: {currentData[hour].Pressure} hPa</p>
-              <p>🌥️ Sää: {weatherIcons[currentData[hour].WeatherSymbol3] || "?"}</p>
-            </div>
-          ))}
-          <button onClick={() => changeDay(-1)}>⬅ Edellinen</button>
-          <button onClick={() => changeDay(1)}>Seuraava ➡</button>
-        </div>
-      )}
+  <div key={currentDay}>
+    <h3>📅 {currentDay}</h3>
+    {Object.keys(currentData).map((hour) => (
+      <div key={hour}>
+        <h4>🕒 Klo {hour}:00</h4>
+        <p>🌡 Lämpötila: {currentData[hour].Temperature}°C</p>
+        <p>💨 Tuulen nopeus: {currentData[hour].WindSpeedMS} m/s</p>
+        <p>🧭 Tuulen suunta: {currentData[hour].WindDirection}°</p>
+        <p>🔽 Ilmanpaine: {currentData[hour].Pressure} hPa</p>
+        <p>🌥️ Sää: {weatherIcons[currentData[hour].WeatherSymbol3] || "?"}</p>
+        <p>🌡 Tuntuu kuin: {currentData[hour].FeelsLikeTemp ? `${currentData[hour].FeelsLikeTemp}°C` : "?"}</p>
+      </div>
+    ))}
+    <button onClick={() => changeDay(-1)}>⬅ Edellinen</button>
+    <button onClick={() => changeDay(1)}>Seuraava ➡</button>
+  </div>
+)}
+
     </div>
   );
 };
