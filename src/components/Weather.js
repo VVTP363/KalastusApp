@@ -10,181 +10,141 @@ const Weather = () => {
   const [longitude, setLongitude] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [currentDayIndex, setCurrentDayIndex] = useState(0);
   const [moonPhase, setMoonPhase] = useState("");
+  
+  const weatherDescriptions = {
+    "1": "Aurinkoista ☀️",
+    "2": "Puolipilvistä ⛅",
+    "3": "Pilvistä ☁️",
+    "21": "Heikko sadekuuro 🌦",
+    "22": "Sadekuuro 🌧",
+    "23": "Voimakas sadekuuro ⛈",
+    "31": "Heikko vesisade 🌦",
+    "32": "Vesisade 🌧",
+    "33": "Voimakas vesisade 🌧💦",
+    "41": "Heikko lumisade ❄️",
+    "42": "Lumisade 🌨",
+    "43": "Voimakas lumisade 🌨❄️"
+  };
 
   useEffect(() => {
-    setCurrentDayIndex(0); // Pakotetaan aloittamaan alusta, kun data päivittyy
-  }, [forecastData]);
-
-  const [locationFetched, setLocationFetched] = useState(false);
-
-  useEffect(() => {
-  if (!locationFetched) {
     getUserLocation();
-    setLocationFetched(true); // Estetään useampi haku
-  }
-}, [locationFetched]);
-
+    calculateMoonPhase();
+  }, []);
+  
+ 
   useEffect(() => {
-    if (latitude && longitude) {
+    if (latitude !== null && longitude !== null) {
+      console.log("🔄 Koordinaatit päivittyivät:", latitude, longitude);
       fetchWeatherData(latitude, longitude);
     }
   }, [latitude, longitude]);
-
-  useEffect(() => {
-    console.log("🔥 Päivämäärä vaihtui:", currentDayIndex);
-  }, [currentDayIndex]);
-
-  useEffect(() => {
-  if (latitude && longitude && !loading) {
-    console.log("📡 Haetaan säädataa sijainnille:", latitude, longitude);
-    fetchWeatherData(latitude, longitude);
-  }
-}, [latitude, longitude]);
-
-  useEffect(() => {
-  console.log("🔄 Päivitetty säädata:", forecastData);
-}, [forecastData]);
-
-  const getUserLocation = () => {
-    if (!navigator.geolocation) {
-      setError("Selaimesi ei tue GPS-sijaintia");
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        setLatitude(latitude);
-        setLongitude(longitude);
-        reverseGeocode(latitude, longitude);
-      },
-      (error) => {
-        console.error("❌ GPS-virhe:", error);
-        setError("GPS ei käytettävissä");
-      }
-    );
-  };
-
   const reverseGeocode = async (lat, lon) => {
-    try {
-      const res = await axios.get(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`
-      );
-      const address = res.data.address;
-      const location =
-        address.village ||
-        address.town ||
-        address.city ||
-        address.municipality ||
-        "Tuntematon paikka";
-      setLocationName(location);
-    } catch (error) {
-      console.error("❌ Paikan haku epäonnistui:", error);
-      setLocationName("Paikka tuntematon");
-    }
-  };
+  
+try {
+    const res = await axios.get(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`
+    );
+    const address = res.data.address;
+    const location =
+      address.village ||
+      address.town ||
+      address.city ||
+      address.municipality ||
+      "Tuntematon paikka";
 
-const fetchWeatherData = async (lat, lon) => {
-  setLoading(true);
-  setError(null);
-  try {
-    const url = `https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature&storedquery_id=fmi::forecast::harmonie::surface::point::simple&latlon=${lat},${lon}&parameters=Temperature,FeelsLikeTemp,WindSpeedMS,WindDirection,Pressure,WeatherSymbol3&_=${new Date().getTime()}`;
-
-    console.log("📡 Haetaan säädataa:", url);
-    const response = await axios.get(url);
-    const xml = response.data;
-    const parser = new XMLParser({ ignoreAttributes: false });
-    const parsedResult = parser.parse(xml);
-
-    if (!parsedResult?.["wfs:FeatureCollection"]?.["wfs:member"]) {
-      throw new Error("Virheellinen XML-muoto");
-    }
-
-    const elements = parsedResult["wfs:FeatureCollection"]["wfs:member"];
-    const dataMap = {};
-    
-    const now = new Date();
-    const currentHour = now.getHours();
-
-    elements.forEach((el) => {
-      const element = el["BsWfs:BsWfsElement"];
-      const time = new Date(element["BsWfs:Time"]);
-      let hourKey = time.getHours();
-      const paramName = element["BsWfs:ParameterName"];
-      const value = element["BsWfs:ParameterValue"];
-
-      const dayKey = time.toISOString().split("T")[0];
-
-      if (!dataMap[dayKey]) {
-        dataMap[dayKey] = {};
-      }
-
-      if (hourKey === 0) hourKey = 24;
-
-      if (currentHour >= 16 && hourKey >= currentHour && hourKey <= 24) {
-        if (!dataMap[dayKey][hourKey]) {
-          dataMap[dayKey][hourKey] = {};
-        }
-        dataMap[dayKey][hourKey][paramName] = value;
-      } else if ([8, 16, 24].includes(hourKey)) {
-        if (!dataMap[dayKey][hourKey]) {
-          dataMap[dayKey][hourKey] = {};
-        }
-        dataMap[dayKey][hourKey][paramName] = value;
-      }
-    });
-
-    setForecastData(dataMap);
-    await reverseGeocode(lat, lon); // 🔥 Lisätty, jotta paikka päivittyy
-    setCurrentDayIndex(0);
+    console.log("📍 ReverseGeocode päivittää paikan:", location);
+    setLocationName(location);
   } catch (error) {
-    console.error("❌ Virhe haettaessa säädataa:", error);
-    setError("Säätiedon haku epäonnistui");
-  } finally {
-    setLoading(false);
+    console.error("❌ Paikan haku epäonnistui:", error);
+    setLocationName("Paikan haku epäonnistui");
+  }
+};
+  const [tempLocationName, setTempLocationName] = useState("");
+
+  const searchForLocation = async () => {
+    console.log("🔍 Haetaan paikka:", searchLocation); // TULOSTAA HAKUSANAN
+
+  try {
+    const res = await axios.get(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${searchLocation}`
+    );
+    console.log("📡 API-vastaus:", res.data); // TULOSTAA NOMINATIM API -VASTAUKSEN
+
+    if (res.data.length > 0) {
+      const place = res.data[0];
+      const newLat = parseFloat(place.lat);
+      const newLon = parseFloat(place.lon);
+      const newLocationName = place.display_name.split(",")[0]; // Näytetään vain ensimmäinen osa nimestä
+      console.log("📍 Uusi paikka löydetty:", place.display_name); // TULOSTAA LÖYDETYN PAIKAN
+      console.log("🌍 Päivitetään koordinaatit:", newLat, newLon); // Tulostaa uudet koordinaatit
+      
+      setLatitude(newLat);
+      setLongitude(newLon);
+      setTimeout(() => {
+        setLocationName(newLocationName);
+      }, 50);
+    
+      await reverseGeocode(newLat, newLon)
+      fetchWeatherData(newLat, newLon);
+    } else {
+      console.warn("⚠️ Paikkaa ei löydy!");
+      setError("Paikkaa ei löydy");
+    }
+  } catch (error) {
+    console.error("❌ Paikkahaun virhe:", error);
+    setError("Paikan haku epäonnistui");
   }
 };
 
-  const searchForLocation = async () => {
-    try {
-      setLoading(true);
-      setForecastData({});
-      const res = await axios.get(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${searchLocation}`
-      );
-      if (res.data.length > 0) {
-        const place = res.data[0];
-        setLatitude(place.lat);
-        setLongitude(place.lon);
-        setLocationName(place.display_name.split(",")[0]);
-        await fetchWeatherData(place.lat, place.lon);
-      } else {
-        setError("Paikkaa ei löydy");
-      }
-    } catch (error) {
-      console.error("❌ Paikkahaun virhe:", error);
-      setError("Paikan haku epäonnistui");
-    }
-  };
+const getUserLocation = () => {
+  if (!navigator.geolocation) {
+    setError("❌ Selaimesi ei tue GPS:ää");
+    return;
+  }
 
-useEffect(() => {
-  calculateMoonPhase();
-}, []);
+  console.log("📡 Pyydetään GPS-lupaa..."); // 🔥 TULOSTAA DEBUG-VIESTIN
+
+  navigator.permissions
+    .query({ name: "geolocation" })
+    .then((result) => {
+      console.log("📜 GPS-luvan tila:", result.state); // 🔥 TULOSTAA LUVAN TILAN
+
+      if (result.state === "denied") {
+        setError("❌ GPS on estetty. Salli selaimen asetuksista!");
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const newLat = position.coords.latitude;
+          const newLon = position.coords.longitude;
+
+          console.log("📍 GPS-sijainti saatu:", newLat, newLon); // 🔥 Varmistus että GPS toimii
+
+          setLatitude(newLat);
+          setLongitude(newLon);
+          setLocationName("Oma sijainti");
+          await reverseGeocode(newLat, newLon);
+          fetchWeatherData(newLat, newLon);
+        },
+        (error) => {
+          console.error("❌ GPS-virhe:", error);
+          setError("📍 GPS ei käytettävissä. Tarkista asetukset.");
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        
+      );
+    });
+};
 
   const calculateMoonPhase = () => {
     const today = new Date();
-    
-    // Viimeisin uusikuu ennen tätä päivämäärää
-    const lastNewMoon = new Date("2025-02-28"); // Uusikuu ennen täysikuuta 14.3.2025
+    const lastNewMoon = new Date("2025-02-28");
     const msPerDay = 1000 * 60 * 60 * 24;
-    const moonCycle = 29.53; // Kuun kierto päivinä
-
-    // Lasketaan päivät viimeisimmästä uudesta kuusta
+    const moonCycle = 29.53;
     let diffDays = Math.floor((today - lastNewMoon) / msPerDay) % moonCycle;
-    if (diffDays < 0) diffDays += moonCycle; // Korjataan mahdollinen negatiivinen arvo
-
-    // Kuun vaiheet:
+    if (diffDays < 0) diffDays += moonCycle;
     let phaseText = "🌑 Uusikuu";
     if (diffDays < 1.5) phaseText = "🌑 Uusikuu";
     else if (diffDays < 7.5) phaseText = "🌒 Kasvava sirppi 1/4";
@@ -192,75 +152,102 @@ useEffect(() => {
     else if (diffDays < 16.5) phaseText = "🌕 Täysikuu";
     else if (diffDays < 23) phaseText = "🌖 Pienenevä kuu 3/4";
     else phaseText = "🌗 Pienenevä kuu 4/4";
-
-  setMoonPhase(phaseText);
-};
-
-  const changeDay = (direction) => {
-  setCurrentDayIndex(prevIndex => {
-    const days = Object.keys(forecastData);
-    let newIndex = prevIndex + direction;
-    if (newIndex < 0) newIndex = 0;
-    if (newIndex >= days.length) newIndex = days.length - 1;
-    
-    console.log("🔄 Vaihdetaan päivä ->", newIndex, "Päivämäärä:", days[newIndex]); 
-    return newIndex;
-  });
-};
-
-  const weatherIcons = {
-    "1": "☀️ Aurinkoista",
-    "2": "🌤️ Puolipilvistä",
-    "3": "☁️ Pilvistä",
-    "21": "🌧️ Sade",
-    "22": "🌨️ Lumisade",
-    "23": "🌧️🌨️ Räntäsade",
+    setMoonPhase(phaseText);
   };
 
-  const days = Object.keys(forecastData);
-  const currentDay = days[currentDayIndex];
-  const currentData = forecastData[currentDay];
- 
+  const fetchWeatherData = async (lat, lon) => {
+  if (!lat || !lon) {
+    console.error("❌ Koordinaatit puuttuvat, ei voida hakea säätietoja!");
+    return;
+  }
+  setLoading(true);
+  setError(null);
+  try {
+    console.log("📡 Haetaan säätiedot:", lat, lon); // Tulostaa haettavat koordinaatit
+    const url = `https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature&storedquery_id=fmi::forecast::harmonie::surface::point::simple&latlon=${lat},${lon}&parameters=Temperature,FeelsLike,WindSpeedMS,WindDirection,Pressure,WeatherSymbol3`;
+    const response = await axios.get(url);
+    const parser = new XMLParser({ ignoreAttributes: false });
+    const parsedResult = parser.parse(response.data);
+    
+    if (!parsedResult?.["wfs:FeatureCollection"]?.["wfs:member"]) {
+      throw new Error("Virheellinen XML-muoto");
+    }
+    console.log("✅ Säädata haettu onnistuneesti!");
+    const elements = parsedResult["wfs:FeatureCollection"]["wfs:member"];
+    const dataMap = {};
+    
+    elements.forEach((el) => {
+      const element = el["BsWfs:BsWfsElement"];
+      const time = new Date(element["BsWfs:Time"]);
+      let hourKey = time.getHours();
+      if (hourKey === 0) hourKey = 24; // Muunnetaan klo 00 → 24
+      
+      const dayKey = time.toISOString().split("T")[0];
+      const paramName = element["BsWfs:ParameterName"];
+      let value = element["BsWfs:ParameterValue"];
+      
+      const openMap = () => {
+        if (!latitude || !longitude) {
+        setError("📍 Ei GPS-sijaintia. Käytä 'Oma Paikka' ensin!");
+        <button onClick={openMap}>📍 Avaa kartta</button>
+        return;
+  }
+
+      const url = `https://www.google.com/maps?q=${latitude},${longitude}`;
+      console.log("🗺️ Avataan kartta:", url);
+      setTimeout(() => {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }, 300);
+};
+      
+
+      if ([8, 16, 24].includes(hourKey)) { // Nyt mukana myös klo 24
+        if (!dataMap[dayKey]) dataMap[dayKey] = {};
+        if (!dataMap[dayKey][hourKey]) dataMap[dayKey][hourKey] = {};
+        if (paramName === "FeelsLike" || paramName === "Temperature") {
+          value = parseFloat(value).toFixed(1);
+        }
+        dataMap[dayKey][hourKey][paramName] = value;
+      }
+    });
+    console.log("🌦 Päivitetty säädata:", dataMap); // Tulostaa uuden säädatan
+    setForecastData(dataMap);
+
+  } catch (error) {
+    console.error("❌ Säätiedon haku epäonnistui:", error);
+    setError("Säätiedon haku epäonnistui");
+  } finally {
+    setLoading(false);
+  }
+};
+
   return (
-    <div>
+    <div key={`${locationName}-${latitude}-${longitude}`}>
       <h2>🌦 Sääennuste</h2>
-      <p>📍 {locationFetched ? `${locationName} (${latitude}, ${longitude})` : "Paikka haetaan..."} </p>
+      <p>📍 {locationName} ({latitude || "-"}, {longitude || "-"})</p>
       <p>🌙 Kuun vaihe: {moonPhase}</p>
-
+      <input
+        type="text"
+        value={searchLocation}
+        onChange={(e) => setSearchLocation(e.target.value)}
+        placeholder="Hae paikka..."
+      />
+      <button onClick={searchForLocation}>🔍 HAE</button>    
+      <button onClick={getUserLocation}>OMA PAIKKA</button>
+      {loading && <p>⏳ Ladataan säätietoja...</p>}
+      {error && <p style={{ color: "red" }}>⚠️ {error}</p>}
       <div>
-        <input
-  type="text"
-  id="location-search"
-  name="location"
-  placeholder="Syötä paikkakunta..."
-  value={searchLocation}
-  onChange={(e) => setSearchLocation(e.target.value)}
-/>
-
-        <button type="button" onClick={searchForLocation}>🔍 Hae</button>
-        <button type="button" onClick={getUserLocation}>📍 Oma paikka</button>
-
+        {Object.entries(forecastData).map(([date, hours]) => (
+          <div key={date}>
+            <h3>{date}</h3>
+            {Object.entries(hours).map(([hour, data]) => (
+              <p key={hour}>
+                ⏰ {hour}:00 🌡 {data.Temperature}°C (Tuntuu kuin {data.FeelsLike}°C) 💨 {data.WindSpeedMS}m/s {data.WindDirection}° 🌤 Sää: {weatherDescriptions[data.WeatherSymbol3] || "Tuntematon"}
+              </p>
+            ))}
+          </div>
+        ))}
       </div>
-
-      {currentData && (
-  <div key={currentDay}>
-    <h3>📅 {currentDay}</h3>
-    {Object.keys(currentData).map((hour) => (
-      <div key={hour}>
-        <h4>🕒 Klo {hour}:00</h4>
-        <p>🌡 Lämpötila: {currentData[hour].Temperature}°C</p>
-        <p>💨 Tuulen nopeus: {currentData[hour].WindSpeedMS} m/s</p>
-        <p>🧭 Tuulen suunta: {currentData[hour].WindDirection}°</p>
-        <p>🔽 Ilmanpaine: {currentData[hour].Pressure} hPa</p>
-        <p>🌥️ Sää: {weatherIcons[currentData[hour].WeatherSymbol3] || "?"}</p>
-        <p>🌡 Tuntuu kuin: {currentData[hour].FeelsLikeTemp ? `${currentData[hour].FeelsLikeTemp}°C` : "?"}</p>
-      </div>
-    ))}
-    <button onClick={() => changeDay(-1)}>⬅ Edellinen</button>
-    <button onClick={() => changeDay(1)}>Seuraava ➡</button>
-  </div>
-)}
-
     </div>
   );
 };
