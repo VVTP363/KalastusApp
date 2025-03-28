@@ -1,35 +1,18 @@
-import React, { useEffect } from "react";
-import FishingMap from "./components/FishingMap";
+// src/App.js
+import React from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Weather from "./components/Weather";
-import WeatherDebug from "./components/WeatherDebug";
+import VirtavesiView from "./components/VirtavesiView";
 
 function App() {
-    useEffect(() => {
-        const handleReadyStateChange = () => {
-            setTimeout(() => {
-                console.log(`Ready state changed: ${document.readyState}`);
-            }, 0);
-        };
-
-        document.addEventListener("readystatechange", handleReadyStateChange);
-
-        return () => {
-            document.removeEventListener("readystatechange", handleReadyStateChange);
-        };
-    }, []);
-
-    return (
-        <div className="App">
-            <h1>KalastusApp - Sääennuste</h1>
-            <Weather />
-            <FishingMap />
-
-            {/* 🛠 DEBUG-NÄYTTÖ: TÄMÄ TULOSTAA RAADON JSON-DATAN */}
-            <WeatherDebug />
-        </div>
-    );
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<Weather />} />
+        <Route path="/virtavedet" element={<VirtavesiView />} />
+      </Routes>
+    </Router>
+  );
 }
 
 export default App;
-
-
